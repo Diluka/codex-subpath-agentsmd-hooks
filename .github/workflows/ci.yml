@@ -19,11 +19,11 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: lts/*
       - name: Install Codex CLI
-        run: npm install --global @openai/codex@0.154.0
+        run: npm install --global @openai/codex@latest
       - name: Install marketplace and run installed hook
         env:
           CODEX_HOME: ${{ runner.temp }}/codex-install-test

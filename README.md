@@ -62,7 +62,7 @@ GitHub Actions 在每次 push、PR 和手动触发时，使用 runner 自带工�
 | Windows | PowerShell |
 | macOS | 系统 `/bin/bash`、BSD `sort` |
 
-Linux 和 Windows 还会安装 Codex CLI 0.154.0，在独立配置目录中运行 `tests/test_plugin_install.ps1`：添加仓库市场、安装插件、检查安装文件和启用状态，并执行已安装的 PowerShell hook 验证地图输出。
+Linux 和 Windows 还会使用 Node.js LTS 安装最新版 Codex CLI，在独立配置目录中运行 `tests/test_plugin_install.ps1`：添加仓库市场、安装插件、检查安装文件和启用状态，并执行已安装的 PowerShell hook 验证地图输出。
 
 测试覆盖 Git 子目录、非 Git 项目跳过、重新扫描、隐藏目录、排除规则和特殊文件名；换行目录名、FIFO 仅在 Unix 上验证。Bash 直接输出文本，PowerShell 输出 `hookSpecificOutput.additionalContext` JSON，二者均受 `SessionStart` 支持。
 
