@@ -105,4 +105,9 @@ mkdir "$fixture/sentinel"
 output=$(cd "$rules/tracked" && GIT_DIR="$fixture/sentinel" "$BASH" "$plugin_root/scripts/project_map.sh")
 assert_line tracked/README.md
 [[ ! -e "$fixture/sentinel/config" && ! -e "$fixture/sentinel/HEAD" ]]
+mkdir "$fixture/cleanup"
+output=$(cd "$rules" && TMPDIR="$fixture/cleanup" "$BASH" "$plugin_root/scripts/project_map.sh")
+assert_line tracked/README.md
+kept=("$fixture/cleanup"/*)
+[[ ${#kept[@]} -eq 1 && -f "${kept[0]}/meta/HEAD" ]]
 printf 'Bash %s: all checks passed\n' "$BASH_VERSION"

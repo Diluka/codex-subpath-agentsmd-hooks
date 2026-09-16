@@ -83,6 +83,7 @@ try {
     exit 1
 } finally {
     if ($temporaryRepository -and (Test-Path -LiteralPath $temporaryRepository)) {
-        Remove-Item -LiteralPath $temporaryRepository -Recurse -Force -ErrorAction SilentlyContinue
+        # Non-recursive deletion fails safely if matcher data remains.
+        try { [IO.Directory]::Delete($temporaryRepository) } catch { }
     }
 }

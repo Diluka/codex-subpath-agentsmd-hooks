@@ -149,6 +149,20 @@ try {
         Assert (-not (Test-Path (Join-Path $sentinel 'config'))) 'Hook must not initialize inherited GIT_DIR'
         Assert (-not (Test-Path (Join-Path $sentinel 'HEAD'))) 'Hook must not write inherited GIT_DIR'
     } finally { $env:GIT_DIR = $savedGitDir }
+    $cleanupRoot = Join-Path $temp 'cleanup'
+    [void][IO.Directory]::CreateDirectory($cleanupRoot)
+    $savedTemp = @{}
+    try {
+        foreach ($name in @('TMPDIR', 'TEMP', 'TMP')) {
+            $savedTemp[$name] = [Environment]::GetEnvironmentVariable($name)
+            [Environment]::SetEnvironmentVariable($name, $cleanupRoot)
+        }
+        $null = Invoke-Map $plain
+        $kept = @(Get-ChildItem -LiteralPath $cleanupRoot -Directory)
+        Assert ($kept.Count -eq 1 -and (Test-Path (Join-Path $kept[0].FullName 'git/HEAD'))) 'Non-empty temporary matcher must not be deleted'
+    } finally {
+        foreach ($name in $savedTemp.Keys) { [Environment]::SetEnvironmentVariable($name, $savedTemp[$name]) }
+    }
     Write-Host 'PASS PowerShell project map checks'
 } finally {
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }

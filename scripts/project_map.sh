@@ -24,7 +24,8 @@ fi
 # Match paths in an empty temporary repository so project/global ignore files
 # cannot add rules beyond the single selected file. Never modify the project.
 scratch=$(mktemp -d)
-trap 'rm -rf -- "$scratch"' EXIT
+# Only remove an empty directory; leave matcher data for system temp cleanup.
+trap 'rmdir -- "$scratch" 2>/dev/null || true' EXIT
 git init --bare -q --template= "$scratch/meta"
 mkdir "$scratch/tree"
 
