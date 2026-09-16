@@ -31,6 +31,11 @@ jobs:
             command: PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash tests/test_project_map.sh
     steps:
       - uses: actions/checkout@v5
-      - name: Run native script tests
-        shell: ${{ matrix.shell }}
+      - name: Run Bash tests
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: ${{ matrix.command }}
+      - name: Run PowerShell tests
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
         run: ${{ matrix.command }}
