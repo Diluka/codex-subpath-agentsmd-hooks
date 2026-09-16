@@ -1,8 +1,7 @@
 # PowerShell 7: emit documentation paths through the Codex SessionStart contract.
 $ErrorActionPreference = 'Stop'
-$temporaryRepository = $null
 foreach ($name in @('GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR')) {
-    Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+    Set-Item -LiteralPath "Env:$name" -Value $null
 }
 
 try {
@@ -31,7 +30,13 @@ try {
         if (Test-Path -LiteralPath $candidate -PathType Leaf) { $ignoreFile = $candidate; break }
     }
     if (-not (Test-Path -LiteralPath $ignoreFile -PathType Leaf)) { throw "Missing ignore rules: $ignoreFile" }
-    $temporaryRepository = Join-Path ([IO.Path]::GetTempPath()) ('project-map-ignore-' + [guid]::NewGuid())
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+        $projectHash = [BitConverter]::ToString($sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($root))).Replace('-', '').ToLowerInvariant()
+    } finally { $sha256.Dispose() }
+    $projectTemp = Join-Path ([IO.Path]::GetTempPath()) ('project-map-ignore-' + $projectHash)
+    # Keep each invocation isolated; the system owns cleanup of the project directory.
+    $temporaryRepository = Join-Path $projectTemp ('run.' + [guid]::NewGuid())
     $matcherTree = Join-Path $temporaryRepository 'tree'
     $matcherGit = Join-Path $temporaryRepository 'git'
     [void][IO.Directory]::CreateDirectory($matcherTree)
@@ -81,9 +86,4 @@ try {
 } catch {
     [Console]::Error.WriteLine("Project documentation map failed (map is incomplete): $_")
     exit 1
-} finally {
-    if ($temporaryRepository -and (Test-Path -LiteralPath $temporaryRepository)) {
-        # Non-recursive deletion fails safely if matcher data remains.
-        try { [IO.Directory]::Delete($temporaryRepository) } catch { }
-    }
 }

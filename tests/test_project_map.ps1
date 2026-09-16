@@ -157,13 +157,19 @@ try {
             $savedTemp[$name] = [Environment]::GetEnvironmentVariable($name)
             [Environment]::SetEnvironmentVariable($name, $cleanupRoot)
         }
-        $null = Invoke-Map $plain
+        $null = Invoke-Map $rules
+        $null = Invoke-Map (Join-Path $rules 'tracked')
         $kept = @(Get-ChildItem -LiteralPath $cleanupRoot -Directory)
-        Assert ($kept.Count -eq 1 -and (Test-Path (Join-Path $kept[0].FullName 'git/HEAD'))) 'Non-empty temporary matcher must not be deleted'
+        Assert ($kept.Count -eq 1 -and $kept[0].Name -cmatch '^project-map-ignore-[0-9a-f]{64}$') 'Same project must reuse its SHA-256 directory'
+        $runs = @(Get-ChildItem -LiteralPath $kept[0].FullName -Directory)
+        Assert ($runs.Count -eq 2) 'Each invocation must retain an isolated matcher'
+        foreach ($run in $runs) { Assert (Test-Path (Join-Path $run.FullName 'git/HEAD')) 'Matcher data must be retained' }
+        $null = Invoke-Map $plain
+        Assert (@(Get-ChildItem -LiteralPath $cleanupRoot -Directory).Count -eq 2) 'Different projects must use different hash directories'
     } finally {
         foreach ($name in $savedTemp.Keys) { [Environment]::SetEnvironmentVariable($name, $savedTemp[$name]) }
     }
     Write-Host 'PASS PowerShell project map checks'
 } finally {
-    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
+    Write-Host "Test fixtures retained: $temp"
 }

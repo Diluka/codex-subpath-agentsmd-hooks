@@ -3,7 +3,7 @@ set -euo pipefail
 
 plugin_root=$(cd -- "$(dirname -- "$0")/.." && pwd)
 fixture=$(mktemp -d)
-trap 'rm -rf -- "$fixture"' EXIT
+trap 'printf "Test fixtures retained: %s\n" "$fixture"' EXIT
 
 assert_line() {
   if ! printf '%s\n' "$output" | grep -Fqx -- "$1"; then
@@ -109,5 +109,18 @@ mkdir "$fixture/cleanup"
 output=$(cd "$rules" && TMPDIR="$fixture/cleanup" "$BASH" "$plugin_root/scripts/project_map.sh")
 assert_line tracked/README.md
 kept=("$fixture/cleanup"/*)
-[[ ${#kept[@]} -eq 1 && -f "${kept[0]}/meta/HEAD" ]]
+[[ ${#kept[@]} -eq 1 && ${kept[0]##*/} =~ ^project-map-ignore-[0-9a-f]{64}$ ]]
+# Concurrent sessions reuse the hash directory, but never share Git locks or trees.
+(cd "$rules" && TMPDIR="$fixture/cleanup" "$BASH" "$plugin_root/scripts/project_map.sh" > "$fixture/first-map") &
+first_pid=$!
+(cd "$rules/tracked" && TMPDIR="$fixture/cleanup" "$BASH" "$plugin_root/scripts/project_map.sh" > "$fixture/second-map") &
+second_pid=$!
+wait "$first_pid"
+wait "$second_pid"
+runs=("${kept[0]}"/run.*)
+[[ ${#runs[@]} -eq 3 ]]
+for run in "${runs[@]}"; do [[ -f "$run/meta/HEAD" ]]; done
+output=$(cd "$fixture/empty" && TMPDIR="$fixture/cleanup" "$BASH" "$plugin_root/scripts/project_map.sh")
+kept=("$fixture/cleanup"/*)
+[[ ${#kept[@]} -eq 2 ]]
 printf 'Bash %s: all checks passed\n' "$BASH_VERSION"

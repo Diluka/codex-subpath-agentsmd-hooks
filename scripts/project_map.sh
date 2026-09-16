@@ -23,9 +23,15 @@ fi
 
 # Match paths in an empty temporary repository so project/global ignore files
 # cannot add rules beyond the single selected file. Never modify the project.
-scratch=$(mktemp -d)
-# Only remove an empty directory; leave matcher data for system temp cleanup.
-trap 'rmdir -- "$scratch" 2>/dev/null || true' EXIT
+if command -v sha256sum >/dev/null; then
+  project_hash=$(printf '%s' "$project_root" | sha256sum)
+else
+  project_hash=$(printf '%s' "$project_root" | shasum -a 256)
+fi
+project_temp=${TMPDIR:-/tmp}/project-map-ignore-${project_hash%% *}
+mkdir -p -- "$project_temp"
+# Keep each invocation isolated; the system owns cleanup of the project directory.
+scratch=$(mktemp -d "$project_temp/run.XXXXXXXX")
 git init --bare -q --template= "$scratch/meta"
 mkdir "$scratch/tree"
 

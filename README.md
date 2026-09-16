@@ -11,14 +11,14 @@
 - `default.ignore` 包含原来的 `.git/`、`.hg/`、`.svn/`、`node_modules/`、`.venv/`、`venv/`、`__pycache__/`。项目提供规则文件时，这些默认项不再自动追加。符号链接和非普通文件始终不列入地图。
 - 规则通过临时空仓库中的 Git 原生匹配器统一处理；进入目录前先判断，排除的目录不会递归扫描。不读取其他全局或子目录 ignore 文件。已跟踪文件、未跟踪文件和嵌套 Git 仓库中的文档同样按选中的规则过滤。
 - 每次重新生成，不缓存、不修改项目文件、不访问网络。子目录 AGENTS.md 的作用域仍限于该目录及其后代。
-- 退出时只尝试删除空临时目录；包含 Git 元数据或目录结构时保留，交由系统清理，不递归删除。
+- 临时数据位于系统临时目录的 `project-map-ignore-<项目绝对路径的 SHA-256>/run.<唯一标识>/`。同一项目共用固定父目录，每次运行独立，避免残留目录和并发 Git 初始化相互影响。运行脚本和测试均不主动清理临时目录，交由系统管理。
 - `additionalContextLimit: 0` 保证地图完整注入，不由 Codex 转成预览。文档特别多的项目会相应占用更多上下文；扫描超过 15 秒则 hook 超时。
 
 ## 使用
 
 | 平台 | 默认脚本 | 运行依赖 |
 | --- | --- | --- |
-| Linux / macOS | `scripts/project_map.sh` | Bash、Git、系统 `sort` |
+| Linux / macOS | `scripts/project_map.sh` | Bash、Git、系统 `sort` 和 `sha256sum`（macOS 使用 `shasum`） |
 | Windows | `scripts/project_map.ps1` | PowerShell 7 (`pwsh`)、Git |
 
 无 Python、Node.js、jq 或第三方库运行依赖。Git 用于定位根目录和解析 ignore 规则，因此非 Git 项目也需要 Git 命令。PowerShell 脚本也可在安装了 `pwsh` 的 Linux/macOS 上执行。Windows 自带的 Windows PowerShell 5.1 不在支持范围内。
