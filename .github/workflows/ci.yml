@@ -17,8 +17,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-    env:
-      CODEX_HOME: ${{ runner.temp }}/codex-install-test
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
@@ -27,6 +25,8 @@ jobs:
       - name: Install Codex CLI
         run: npm install --global @openai/codex@0.154.0
       - name: Install marketplace and run installed hook
+        env:
+          CODEX_HOME: ${{ runner.temp }}/codex-install-test
         shell: pwsh
         run: ./tests/test_plugin_install.ps1
 
