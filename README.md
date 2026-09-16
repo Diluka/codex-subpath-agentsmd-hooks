@@ -37,13 +37,23 @@ bash scripts/project_map.sh
 
 ## 开发验证
 
-测试使用 Python 标准库，无第三方测试框架；Python 仅用于开发验证。
+测试也使用原生 Bash / PowerShell，无 Python 或第三方测试框架：
 
 ```bash
-python3 -m unittest discover -s tests -v
-PROJECT_MAP_SHELL=pwsh python3 -m unittest discover -s tests -v
+bash tests/test_project_map.sh
+pwsh -NoLogo -NoProfile -File tests/test_project_map.ps1
 ```
 
-本地测试在 Linux 上执行配置中的两套 hook 命令，覆盖 Git 子目录、非 Git 项目、压缩后刷新、隐藏目录、符号链接和特殊文件名；不等同于 Windows 主机或真实 Codex 会话的压缩端到端验证。Bash 直接输出文本，PowerShell 输出 `hookSpecificOutput.additionalContext` JSON，二者均受 `SessionStart` 支持。
+GitHub Actions 在每次 push、PR 和手动触发时运行以下组合，使用 runner 自带工具，无依赖安装步骤：
+
+| 系统 | 测试脚本 |
+| --- | --- |
+| Linux | Bash、PowerShell |
+| Windows | PowerShell |
+| macOS | 系统 `/bin/bash`、BSD `find` / `sort` |
+
+macOS 不能仅凭 Linux 通过就认定兼容：系统 Bash 版本、BSD 工具和文件系统大小写行为均可能不同，因此保留轻量原生测试。
+
+测试覆盖 Git 子目录、非 Git 项目、重新扫描、隐藏目录、排除规则和特殊文件名；换行目录名、FIFO 仅在 Unix 上验证。它们验证脚本行为，不等同于真实 Codex 会话的压缩端到端验证。Bash 直接输出文本，PowerShell 输出 `hookSpecificOutput.additionalContext` JSON，二者均受 `SessionStart` 支持。
 
 协议参考：[Codex Hooks](https://developers.openai.com/codex/hooks)、[插件打包](https://developers.openai.com/plugins/build/plugins)。

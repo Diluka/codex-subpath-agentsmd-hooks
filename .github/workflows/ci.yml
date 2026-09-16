@@ -1,0 +1,41 @@
+name: Script tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / ${{ matrix.shell }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            shell: bash
+            command: /bin/bash tests/test_project_map.sh
+          - os: ubuntu-latest
+            shell: pwsh
+            command: ./tests/test_project_map.ps1
+          - os: windows-latest
+            shell: pwsh
+            command: ./tests/test_project_map.ps1
+          - os: macos-latest
+            shell: bash
+            command: PATH=/usr/bin:/bin:/usr/sbin:/sbin /bin/bash tests/test_project_map.sh
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run Bash tests
+        if: matrix.shell == 'bash'
+        shell: bash
+        run: ${{ matrix.command }}
+      - name: Run PowerShell tests
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: ${{ matrix.command }}
