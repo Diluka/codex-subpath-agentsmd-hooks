@@ -10,7 +10,7 @@ function Add-Document([string]$root, [string]$path) {
     [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($file))
     [IO.File]::WriteAllText($file, 'CONTENTS_MUST_NOT_APPEAR')
 }
-function Invoke-Map([string]$cwd, [string]$source = 'startup', [switch]$Fails) {
+function Invoke-Map([string]$cwd, [string]$source = 'startup', [switch]$Fails, [switch]$Skip) {
     $start = [Diagnostics.ProcessStartInfo]::new((Get-Process -Id $PID).Path)
     $start.UseShellExecute = $false
     $start.RedirectStandardInput = $true
@@ -35,6 +35,10 @@ function Invoke-Map([string]$cwd, [string]$source = 'startup', [switch]$Fails) {
             return
         }
         Assert ($process.ExitCode -eq 0) "Hook failed: $errorText"
+        if ($Skip) {
+            Assert ([string]::IsNullOrWhiteSpace($output)) 'Non-git directory must emit nothing'
+            return
+        }
         $result = $output | ConvertFrom-Json
         Assert ($result.hookSpecificOutput.hookEventName -ceq 'SessionStart') 'Wrong hook event'
         $context = $result.hookSpecificOutput.additionalContext
@@ -50,6 +54,7 @@ try {
     Assert ($LASTEXITCODE -eq 0) 'git init failed'
     foreach ($path in @('AGENTS.md', 'README.md', 'src/ReadMe.MD', '.hidden/agents.md', '中文 空格/README.md')) { Add-Document $repo $path }
     foreach ($dir in @('.git', '.hg', '.svn', 'node_modules', '.venv', 'venv', '__pycache__')) { Add-Document $repo "$dir/ignored/README.md" }
+    [IO.File]::WriteAllLines((Join-Path $repo '.gitignore'), @('.hg/', '.svn/', 'node_modules/', '.venv/', 'venv/', '__pycache__/'))
     $context = Invoke-Map (Join-Path $repo 'src')
     Assert ($context.Contains('Project root: ' + (ConvertTo-Json -InputObject $repo -Compress))) 'Subdirectory must resolve to git root'
     $paths = @($context -split "`n" | Where-Object { $_.StartsWith('"') } | ForEach-Object { ConvertFrom-Json -InputObject $_ })
@@ -63,9 +68,11 @@ try {
 
     $plain = Join-Path $temp 'plain'
     [void][IO.Directory]::CreateDirectory($plain)
-    Assert ((Invoke-Map $plain).Contains('No matching documentation files found.')) 'Empty project must be explicit'
+    Invoke-Map $plain -Skip
     Add-Document $plain 'README.md'
-    Assert (((Invoke-Map $plain) -split "`n") -ccontains '"README.md"') 'Non-git project must scan cwd'
+    Invoke-Map $plain -Skip
+    & git -C $plain init -q
+    Assert ($LASTEXITCODE -eq 0) 'git init failed'
     Invoke-Map 'relative/path' -Fails
     Invoke-Map (Join-Path $temp 'missing') -Fails
     Invoke-Map (Join-Path $plain 'README.md') -Fails
@@ -97,47 +104,45 @@ try {
         Assert ($linkedMap -notmatch '"linked/') 'Directory symlinks must not be traversed'
         Assert (($linkedMap -split "`n") -cnotcontains '"AGENTS.md"') 'File symlinks must not be included'
     }
-    # The chosen file is the only ignore source, even when it is empty.
+    # Git owns ignore matching, including nested, local, and configured excludes.
     $rules = Join-Path $temp 'rules'
     [void][IO.Directory]::CreateDirectory($rules)
     & git -C $rules init -q
     Assert ($LASTEXITCODE -eq 0) 'git init failed'
     $documents = @('tracked/README.md', 'node_modules/README.md', 'nested/README.md', 'top/README.md',
-        'child/top/README.md', 'tree/deep/README.md', 'open/README.md', 'closed/README.md', '#hash/README.md', '#comment/README.md')
+        'child/top/README.md', 'tree/deep/README.md', 'open/README.md', 'closed/README.md', '#hash/README.md', '#comment/README.md',
+        'nested/hidden/README.md', 'local/README.md', 'global/README.md')
     foreach ($path in $documents) { Add-Document $rules $path }
     & git -C $rules add tracked/README.md
     Assert ($LASTEXITCODE -eq 0) 'git add failed'
     & git -C (Join-Path $rules 'nested') init -q
     Assert ($LASTEXITCODE -eq 0) 'nested git init failed'
-    $ignore = Join-Path $rules '.ignore'
+    Add-Document $rules 'nested/.git/README.md'
     $gitignore = Join-Path $rules '.gitignore'
-    [IO.File]::WriteAllText($gitignore, "tracked/`n")
-    [IO.File]::WriteAllLines($ignore, @('#comment/', '/top/', 'tree/**', 'open/*', '!open/README.md',
+    [IO.File]::WriteAllLines($gitignore, @('tracked/', '#comment/', '/top/', 'tree/**', 'open/*', '!open/README.md',
         'closed/', '!closed/README.md', '\#hash/'))
-    foreach ($stage in @('selected', 'empty', 'git', 'default')) {
-        switch ($stage) {
-            empty { [IO.File]::WriteAllText($ignore, '') }
-            git { Remove-Item -LiteralPath $ignore -Force }
-            'default' { Remove-Item -LiteralPath $gitignore -Force }
-        }
-        $map = (Invoke-Map $rules) -split "`n"
-        $excluded = switch ($stage) {
-            selected { @('top/README.md', 'tree/deep/README.md', 'closed/README.md', '#hash/README.md') }
-            git { @('tracked/README.md') }
-            'default' { @('node_modules/README.md') }
-            empty { @() }
-        }
-        foreach ($path in $documents) {
-            $quoted = ConvertTo-Json -InputObject $path -Compress
-            Assert (($map -ccontains $quoted) -eq ($excluded -cnotcontains $path)) "Wrong ignore result ($stage): $path"
-        }
+    [IO.File]::WriteAllText((Join-Path $rules '.ignore'), "*`n")
+    [IO.File]::WriteAllText((Join-Path $rules 'nested/.gitignore'), "hidden/`n")
+    [IO.File]::WriteAllText((Join-Path $rules '.git/info/exclude'), "local/`n")
+    $globalIgnore = Join-Path $temp 'global-ignore'
+    [IO.File]::WriteAllText($globalIgnore, "global/`n")
+    & git -C $rules config core.excludesFile $globalIgnore
+    Assert ($LASTEXITCODE -eq 0) 'git config failed'
+    $map = (Invoke-Map $rules) -split "`n"
+    Assert ($map -cnotcontains '"nested/.git/README.md"') 'Nested Git metadata must be skipped'
+    $excluded = @('tracked/README.md', 'top/README.md', 'tree/deep/README.md', 'closed/README.md', '#hash/README.md',
+        'nested/hidden/README.md', 'local/README.md', 'global/README.md')
+    foreach ($path in $documents) {
+        $quoted = ConvertTo-Json -InputObject $path -Compress
+        Assert (($map -ccontains $quoted) -eq ($excluded -cnotcontains $path)) "Wrong ignore result: $path"
     }
+    [IO.File]::AppendAllText($gitignore, "node_modules/`n")
     if (-not $IsWindows) {
         $blocked = Join-Path $rules 'node_modules'
         & chmod 000 $blocked
         Assert ($LASTEXITCODE -eq 0) 'chmod failed'
         try {
-            Assert (((Invoke-Map $rules) -split "`n") -ccontains '"tracked/README.md"') 'Excluded directories must be pruned before enumeration'
+            Assert (((Invoke-Map $rules) -split "`n") -ccontains '"open/README.md"') 'Excluded directories must be pruned before enumeration'
         } finally { & chmod 700 $blocked }
     }
     $sentinel = Join-Path $temp 'sentinel'
@@ -145,7 +150,7 @@ try {
     $savedGitDir = $env:GIT_DIR
     try {
         $env:GIT_DIR = $sentinel
-        Assert (((Invoke-Map (Join-Path $rules 'tracked')) -split "`n") -ccontains '"tracked/README.md"') 'Inherited GIT_DIR must not change project root'
+        Assert (((Invoke-Map (Join-Path $rules 'tracked')) -split "`n") -ccontains '"open/README.md"') 'Inherited GIT_DIR must not change project root'
         Assert (-not (Test-Path (Join-Path $sentinel 'config'))) 'Hook must not initialize inherited GIT_DIR'
         Assert (-not (Test-Path (Join-Path $sentinel 'HEAD'))) 'Hook must not write inherited GIT_DIR'
     } finally { $env:GIT_DIR = $savedGitDir }
@@ -159,13 +164,7 @@ try {
         }
         $null = Invoke-Map $rules
         $null = Invoke-Map (Join-Path $rules 'tracked')
-        $kept = @(Get-ChildItem -LiteralPath $cleanupRoot -Directory)
-        Assert ($kept.Count -eq 1 -and $kept[0].Name -cmatch '^project-map-ignore-[0-9a-f]{64}$') 'Same project must reuse its SHA-256 directory'
-        $runs = @(Get-ChildItem -LiteralPath $kept[0].FullName -Directory)
-        Assert ($runs.Count -eq 2) 'Each invocation must retain an isolated matcher'
-        foreach ($run in $runs) { Assert (Test-Path (Join-Path $run.FullName 'git/HEAD')) 'Matcher data must be retained' }
-        $null = Invoke-Map $plain
-        Assert (@(Get-ChildItem -LiteralPath $cleanupRoot -Directory).Count -eq 2) 'Different projects must use different hash directories'
+        Assert (@(Get-ChildItem -LiteralPath $cleanupRoot -Force).Count -eq 0) 'Hook must not create temporary files'
     } finally {
         foreach ($name in $savedTemp.Keys) { [Environment]::SetEnvironmentVariable($name, $savedTemp[$name]) }
     }
