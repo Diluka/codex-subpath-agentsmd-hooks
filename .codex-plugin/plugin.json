@@ -1,0 +1,17 @@
+{
+  "name": "codex-subpath-agentsmd-hooks",
+  "version": "0.1.0",
+  "description": "Inject a project-wide AGENTS.md and README.md path map at session start and after compaction.",
+  "author": {
+    "name": "Local developer"
+  },
+  "interface": {
+    "displayName": "Project Documentation Map",
+    "shortDescription": "Locate project instructions and READMEs automatically.",
+    "longDescription": "Refresh the AGENTS.md and README.md path map when a session starts, resumes, clears, or compacts.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [],
+    "defaultPrompt": "Locate the project instructions and relevant README files."
+  }
+}

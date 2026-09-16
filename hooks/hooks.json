@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${PLUGIN_ROOT}/scripts/project_map.sh\"",
+            "commandWindows": "pwsh -NoLogo -NoProfile -File \"${PLUGIN_ROOT}/scripts/project_map.ps1\"",
+            "timeout": 15,
+            "statusMessage": "Loading project documentation map",
+            "additionalContextLimit": 0
+          }
+        ]
+      }
+    ]
+  }
+}
