@@ -23,7 +23,16 @@ Git 用于定位根目录和解析忽略规则。PowerShell 脚本也可在安�
 
 插件使用 `.codex-plugin/plugin.json` 和默认发现的 `hooks/hooks.json`。Codex 通过 `commandWindows` 选择 Windows 脚本，并在执行前替换 `${PLUGIN_ROOT}`。当前契约核验版本为 Codex CLI 0.154.0。
 
-将本目录作为插件加入你使用的 Codex 插件市场，然后安装并启用。安装后在 Codex CLI 的 `/hooks` 中审阅并信任 hook；再打开新任务验证。更新 hook 定义后需要重新信任，修改源码后也需要更新已安装的插件缓存。
+通过仓库自带的市场安装：
+
+```bash
+codex plugin marketplace add Diluka/codex-subpath-agentsmd-hooks
+codex plugin add codex-subpath-agentsmd-hooks@codex-subpath-agentsmd-hooks
+```
+
+仓库的 `.agents/plugins/marketplace.json` 指向根目录中的插件。也可以在 Codex 的添加市场入口填写仓库地址。
+
+安装后在 Codex CLI 的 `/hooks` 中审阅并信任 hook，再打开新任务验证。更新 hook 定义后需要重新信任，修改源码后也需要更新已安装的插件缓存。
 
 也可先直接验证输出：
 
@@ -52,6 +61,8 @@ GitHub Actions 在每次 push、PR 和手动触发时，使用 runner 自带工�
 | Linux | Bash、PowerShell |
 | Windows | PowerShell |
 | macOS | 系统 `/bin/bash`、BSD `sort` |
+
+Linux 和 Windows 还会使用 Node.js LTS 安装最新版 Codex CLI，在独立配置目录中运行 `tests/test_plugin_install.ps1`：添加仓库市场、安装插件、检查安装文件和启用状态，并执行已安装的 PowerShell hook 验证地图输出。
 
 测试覆盖 Git 子目录、非 Git 项目跳过、重新扫描、隐藏目录、排除规则和特殊文件名；换行目录名、FIFO 仅在 Unix 上验证。Bash 直接输出文本，PowerShell 输出 `hookSpecificOutput.additionalContext` JSON，二者均受 `SessionStart` 支持。
 
