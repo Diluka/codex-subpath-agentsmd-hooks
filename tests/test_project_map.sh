@@ -55,4 +55,54 @@ for name in $'root\nname' $'root\n'; do
   output=$(cd "$fixture/$name/src" && "$BASH" "$plugin_root/scripts/project_map.sh")
   assert_line README.md
 done
+# Selected ignore rules replace, rather than merge with, the other sources.
+rules="$fixture/rules"
+mkdir "$rules"
+git init -q "$rules"
+for path in tracked/README.md node_modules/README.md nested/README.md top/README.md \
+  child/top/README.md tree/deep/README.md open/README.md closed/README.md '#hash/README.md' '#comment/README.md'; do
+  mkdir -p "$rules/${path%/*}"
+  touch "$rules/$path"
+done
+git -C "$rules" add tracked/README.md
+git init -q "$rules/nested"
+printf 'tracked/\n' > "$rules/.gitignore"
+printf '%s\n' '#comment/' '/top/' 'tree/**' 'open/*' '!open/README.md' \
+  'closed/' '!closed/README.md' '\#hash/' > "$rules/.ignore"
+for stage in selected empty git default; do
+  case "$stage" in
+    empty) : > "$rules/.ignore" ;;
+    git) rm "$rules/.ignore" ;;
+    default) rm "$rules/.gitignore" ;;
+  esac
+  output=$(cd "$rules" && "$BASH" "$plugin_root/scripts/project_map.sh")
+  for path in tracked/README.md node_modules/README.md nested/README.md top/README.md \
+    child/top/README.md tree/deep/README.md open/README.md closed/README.md '#hash/README.md' '#comment/README.md'; do
+    excluded=false
+    case "$stage:$path" in
+      selected:top/*|selected:tree/*|selected:closed/*|selected:\#hash/*|git:tracked/*|default:node_modules/*) excluded=true ;;
+    esac
+    escaped=$(printf '%q' "$path")
+    if $excluded; then
+      if printf '%s\n' "$output" | grep -Fqx -- "$escaped"; then
+        printf 'Unexpected entry (%s): %s\n' "$stage" "$path" >&2; exit 1
+      fi
+    else
+      assert_line "$escaped"
+    fi
+  done
+done
+# Excluded directories must be pruned before attempting to enumerate them.
+chmod 000 "$rules/node_modules"
+if output=$(cd "$rules" && "$BASH" "$plugin_root/scripts/project_map.sh"); then
+  chmod 700 "$rules/node_modules"
+else
+  chmod 700 "$rules/node_modules"
+  exit 1
+fi
+assert_line tracked/README.md
+mkdir "$fixture/sentinel"
+output=$(cd "$rules/tracked" && GIT_DIR="$fixture/sentinel" "$BASH" "$plugin_root/scripts/project_map.sh")
+assert_line tracked/README.md
+[[ ! -e "$fixture/sentinel/config" && ! -e "$fixture/sentinel/HEAD" ]]
 printf 'Bash %s: all checks passed\n' "$BASH_VERSION"

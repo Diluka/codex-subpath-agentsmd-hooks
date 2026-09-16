@@ -1,0 +1,8 @@
+# Used only when the project root has neither .ignore nor .gitignore.
+.git/
+.hg/
+.svn/
+node_modules/
+.venv/
+venv/
+__pycache__/

@@ -97,6 +97,58 @@ try {
         Assert ($linkedMap -notmatch '"linked/') 'Directory symlinks must not be traversed'
         Assert (($linkedMap -split "`n") -cnotcontains '"AGENTS.md"') 'File symlinks must not be included'
     }
+    # The chosen file is the only ignore source, even when it is empty.
+    $rules = Join-Path $temp 'rules'
+    [void][IO.Directory]::CreateDirectory($rules)
+    & git -C $rules init -q
+    Assert ($LASTEXITCODE -eq 0) 'git init failed'
+    $documents = @('tracked/README.md', 'node_modules/README.md', 'nested/README.md', 'top/README.md',
+        'child/top/README.md', 'tree/deep/README.md', 'open/README.md', 'closed/README.md', '#hash/README.md', '#comment/README.md')
+    foreach ($path in $documents) { Add-Document $rules $path }
+    & git -C $rules add tracked/README.md
+    Assert ($LASTEXITCODE -eq 0) 'git add failed'
+    & git -C (Join-Path $rules 'nested') init -q
+    Assert ($LASTEXITCODE -eq 0) 'nested git init failed'
+    $ignore = Join-Path $rules '.ignore'
+    $gitignore = Join-Path $rules '.gitignore'
+    [IO.File]::WriteAllText($gitignore, "tracked/`n")
+    [IO.File]::WriteAllLines($ignore, @('#comment/', '/top/', 'tree/**', 'open/*', '!open/README.md',
+        'closed/', '!closed/README.md', '\#hash/'))
+    foreach ($stage in @('selected', 'empty', 'git', 'default')) {
+        switch ($stage) {
+            empty { [IO.File]::WriteAllText($ignore, '') }
+            git { Remove-Item -LiteralPath $ignore -Force }
+            'default' { Remove-Item -LiteralPath $gitignore -Force }
+        }
+        $map = (Invoke-Map $rules) -split "`n"
+        $excluded = switch ($stage) {
+            selected { @('top/README.md', 'tree/deep/README.md', 'closed/README.md', '#hash/README.md') }
+            git { @('tracked/README.md') }
+            'default' { @('node_modules/README.md') }
+            empty { @() }
+        }
+        foreach ($path in $documents) {
+            $quoted = ConvertTo-Json -InputObject $path -Compress
+            Assert (($map -ccontains $quoted) -eq ($excluded -cnotcontains $path)) "Wrong ignore result ($stage): $path"
+        }
+    }
+    if (-not $IsWindows) {
+        $blocked = Join-Path $rules 'node_modules'
+        & chmod 000 $blocked
+        Assert ($LASTEXITCODE -eq 0) 'chmod failed'
+        try {
+            Assert (((Invoke-Map $rules) -split "`n") -ccontains '"tracked/README.md"') 'Excluded directories must be pruned before enumeration'
+        } finally { & chmod 700 $blocked }
+    }
+    $sentinel = Join-Path $temp 'sentinel'
+    [void][IO.Directory]::CreateDirectory($sentinel)
+    $savedGitDir = $env:GIT_DIR
+    try {
+        $env:GIT_DIR = $sentinel
+        Assert (((Invoke-Map (Join-Path $rules 'tracked')) -split "`n") -ccontains '"tracked/README.md"') 'Inherited GIT_DIR must not change project root'
+        Assert (-not (Test-Path (Join-Path $sentinel 'config'))) 'Hook must not initialize inherited GIT_DIR'
+        Assert (-not (Test-Path (Join-Path $sentinel 'HEAD'))) 'Hook must not write inherited GIT_DIR'
+    } finally { $env:GIT_DIR = $savedGitDir }
     Write-Host 'PASS PowerShell project map checks'
 } finally {
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
