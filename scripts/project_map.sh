@@ -38,7 +38,7 @@ mkdir "$scratch/tree"
 # ponytail: one Git process per directory/document; batch if large trees hit the hook timeout.
 is_ignored() {
   local status=0
-  git -C "$scratch/tree" --git-dir="$scratch/meta" --work-tree="$scratch/tree" \
+  git -C "$scratch/tree" --git-dir=../meta --work-tree=. \
     -c "core.excludesFile=$ignore_file" \
     check-ignore --no-index --quiet -- "$1" || status=$?
   if [[ $status -gt 1 ]]; then exit "$status"; fi

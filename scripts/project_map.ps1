@@ -44,7 +44,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Could not initialize the temporary Git ignore matcher' }
     # ponytail: one Git process per directory/document; batch if large trees hit the hook timeout.
     function Is-Ignored([string]$relative) {
-        & $git.Source -C $matcherTree --git-dir=$matcherGit --work-tree=$matcherTree -c "core.excludesFile=$ignoreFile" check-ignore --no-index --quiet -- $relative
+        & $git.Source -C $matcherTree --git-dir=../git --work-tree=. -c "core.excludesFile=$ignoreFile" check-ignore --no-index --quiet -- $relative
         if ($LASTEXITCODE -eq 0) { return $true }
         if ($LASTEXITCODE -eq 1) { return $false }
         throw "Git ignore processing failed for: $relative"
