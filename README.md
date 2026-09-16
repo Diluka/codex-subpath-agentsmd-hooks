@@ -1,30 +1,31 @@
 # Codex Project Documentation Map
 
-在会话启动、恢复、清空及上下文压缩后，向 Codex 注入整个项目的 `AGENTS.md` / `README.md` 路径地图。只扫描文件名，不读取正文；代理根据地图按需读取相关说明。
+在会话启动、恢复、清空及上下文压缩后，向 Codex 注入整个项目的 `AGENTS.md` / `README.md` 路径地图。代理根据地图按需读取相关说明。
 
 ## 工作方式
 
 - 使用一个同步 `SessionStart` hook，匹配 `startup|resume|clear|compact`。按官方契约，自动或手动压缩后，会在下一次模型请求前重新注入，包括同一轮中的继续执行。
-- 根据会话工作目录查找 Git 工作树根目录；非 Git 项目或没有 Git 时使用会话工作目录。Bash 使用 hook 进程工作目录，PowerShell 使用事件的 `cwd`。
-- 递归扫描，包含隐藏目录，文件名大小写不敏感。路径相对项目根目录排序；Bash 使用原生 `%q` 转义，PowerShell 使用 JSON 字符串转义，文件名中的换行不会伪造地图条目。
-- 跳过 `.git`、`.hg`、`.svn`、`node_modules`、`.venv`、`venv`、`__pycache__` 目录及符号链接；其他目录均扫描，不使用 `.gitignore`，因此未跟踪和被忽略的项目文档也能出现。
-- 每次重新生成，不缓存、不修改项目文件、不访问网络。子目录 AGENTS.md 的作用域仍限于该目录及其后代。
-- `additionalContextLimit: 0` 保证地图完整注入，不由 Codex 转成预览。文档特别多的项目会相应占用更多上下文；扫描超过 15 秒则 hook 超时。
+- 根据会话工作目录查找 Git 工作树根目录；非 Git 项目直接跳过。Bash 使用 hook 进程工作目录，PowerShell 使用事件的 `cwd`。
+- 递归扫描，包含隐藏目录，匹配文件名的各种大小写形式。路径相对项目根目录排序；Bash 使用原生 `%q` 转义，PowerShell 使用 JSON 字符串转义。
+- 直接在项目仓库运行 `git check-ignore --no-index`，使用 Git 原生忽略规则：各级 `.gitignore`、`.git/info/exclude` 和用户配置的全局规则。
+- 进入目录前先判断并跳过被忽略的目录。忽略规则同样应用于已跟踪文件；嵌套仓库中的文档也会扫描。始终跳过 `.git`、符号链接和非普通文件。
+- 每次重新生成地图。子目录 AGENTS.md 的作用域限于该目录及其后代。
+- `additionalContextLimit: 0` 保证地图完整注入。文档特别多的项目会相应占用更多上下文；扫描超过 15 秒则 hook 超时。
 
 ## 使用
 
 | 平台 | 默认脚本 | 运行依赖 |
 | --- | --- | --- |
-| Linux / macOS | `scripts/project_map.sh` | Bash、系统 `find` 和 `sort` |
-| Windows | `scripts/project_map.ps1` | PowerShell 7 (`pwsh`) |
+| Linux / macOS | `scripts/project_map.sh` | Bash、Git、系统 `sort` |
+| Windows | `scripts/project_map.ps1` | PowerShell 7 (`pwsh`)、Git |
 
-无 Python、Node.js、jq 或第三方库运行依赖。Git 可选，用于从仓库子目录定位根目录。PowerShell 脚本也可在安装了 `pwsh` 的 Linux/macOS 上执行。Windows 自带的 Windows PowerShell 5.1 不在支持范围内。
+Git 用于定位根目录和解析忽略规则。PowerShell 脚本也可在安装了 PowerShell 7 (`pwsh`) 的 Linux/macOS 上执行。
 
 插件使用 `.codex-plugin/plugin.json` 和默认发现的 `hooks/hooks.json`。Codex 通过 `commandWindows` 选择 Windows 脚本，并在执行前替换 `${PLUGIN_ROOT}`。当前契约核验版本为 Codex CLI 0.154.0。
 
 将本目录作为插件加入你使用的 Codex 插件市场，然后安装并启用。安装后在 Codex CLI 的 `/hooks` 中审阅并信任 hook；再打开新任务验证。更新 hook 定义后需要重新信任，修改源码后也需要更新已安装的插件缓存。
 
-当前仓库只提供插件源码，不修改个人市场或自动安装。也可先直接验证输出：
+也可先直接验证输出：
 
 ```bash
 bash scripts/project_map.sh
@@ -37,23 +38,21 @@ bash scripts/project_map.sh
 
 ## 开发验证
 
-测试也使用原生 Bash / PowerShell，无 Python 或第三方测试框架：
+测试使用原生 Bash / PowerShell：
 
 ```bash
 bash tests/test_project_map.sh
 pwsh -NoLogo -NoProfile -File tests/test_project_map.ps1
 ```
 
-GitHub Actions 在每次 push、PR 和手动触发时运行以下组合，使用 runner 自带工具，无依赖安装步骤：
+GitHub Actions 在每次 push、PR 和手动触发时，使用 runner 自带工具运行以下组合：
 
 | 系统 | 测试脚本 |
 | --- | --- |
 | Linux | Bash、PowerShell |
 | Windows | PowerShell |
-| macOS | 系统 `/bin/bash`、BSD `find` / `sort` |
+| macOS | 系统 `/bin/bash`、BSD `sort` |
 
-macOS 不能仅凭 Linux 通过就认定兼容：系统 Bash 版本、BSD 工具和文件系统大小写行为均可能不同，因此保留轻量原生测试。
-
-测试覆盖 Git 子目录、非 Git 项目、重新扫描、隐藏目录、排除规则和特殊文件名；换行目录名、FIFO 仅在 Unix 上验证。它们验证脚本行为，不等同于真实 Codex 会话的压缩端到端验证。Bash 直接输出文本，PowerShell 输出 `hookSpecificOutput.additionalContext` JSON，二者均受 `SessionStart` 支持。
+测试覆盖 Git 子目录、非 Git 项目跳过、重新扫描、隐藏目录、排除规则和特殊文件名；换行目录名、FIFO 仅在 Unix 上验证。Bash 直接输出文本，PowerShell 输出 `hookSpecificOutput.additionalContext` JSON，二者均受 `SessionStart` 支持。
 
 协议参考：[Codex Hooks](https://developers.openai.com/codex/hooks)、[插件打包](https://developers.openai.com/plugins/build/plugins)。
