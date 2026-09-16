@@ -1,0 +1,20 @@
+{
+  "name": "codex-subpath-agentsmd-hooks",
+  "interface": {
+    "displayName": "Project Documentation Map"
+  },
+  "plugins": [
+    {
+      "name": "codex-subpath-agentsmd-hooks",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

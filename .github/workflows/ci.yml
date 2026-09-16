@@ -1,4 +1,4 @@
-name: Script tests
+name: Tests
 
 on:
   push:
@@ -9,6 +9,27 @@ permissions:
   contents: read
 
 jobs:
+  install:
+    name: ${{ matrix.os }} / Codex installation
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CODEX_HOME: ${{ runner.temp }}/codex-install-test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Codex CLI
+        run: npm install --global @openai/codex@0.154.0
+      - name: Install marketplace and run installed hook
+        shell: pwsh
+        run: ./tests/test_plugin_install.ps1
+
   test:
     name: ${{ matrix.os }} / ${{ matrix.shell }}
     runs-on: ${{ matrix.os }}
