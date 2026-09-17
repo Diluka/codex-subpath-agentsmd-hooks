@@ -7,7 +7,7 @@
 - 使用一个同步 `SessionStart` hook，匹配 `startup|resume|clear|compact`。按官方契约，自动或手动压缩后，会在下一次模型请求前重新注入，包括同一轮中的继续执行。
 - 根据会话工作目录查找 Git 工作树根目录；非 Git 项目直接跳过。Bash 使用 hook 进程工作目录，PowerShell 使用事件的 `cwd`。
 - 递归扫描，包含隐藏目录，匹配文件名的各种大小写形式。路径相对项目根目录排序；Bash 使用原生 `%q` 转义，PowerShell 使用 JSON 字符串转义。
-- 直接在项目仓库运行 `git check-ignore --no-index`，使用 Git 原生忽略规则：各级 `.gitignore`、`.git/info/exclude` 和用户配置的全局规则。
+- 优先使用项目根目录的 `.ignore`（Git 忽略语法；空文件表示不排除任何路径）。存在该文件时，仅使用其规则；否则运行 `git check-ignore --no-index`，回退到 Git 默认规则：各级 `.gitignore`、`.git/info/exclude` 和用户配置的全局规则。
 - 进入目录前先判断并跳过被忽略的目录。忽略规则同样应用于已跟踪文件；嵌套仓库中的文档也会扫描。始终跳过 `.git`、符号链接和非普通文件。
 - 每次重新生成地图。子目录 AGENTS.md 的作用域限于该目录及其后代。
 - `additionalContextLimit: 0` 保证地图完整注入。文档特别多的项目会相应占用更多上下文；扫描超过 15 秒则 hook 超时。

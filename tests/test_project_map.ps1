@@ -121,7 +121,6 @@ try {
     $gitignore = Join-Path $rules '.gitignore'
     [IO.File]::WriteAllLines($gitignore, @('tracked/', '#comment/', '/top/', 'tree/**', 'open/*', '!open/README.md',
         'closed/', '!closed/README.md', '\#hash/'))
-    [IO.File]::WriteAllText((Join-Path $rules '.ignore'), "*`n")
     [IO.File]::WriteAllText((Join-Path $rules 'nested/.gitignore'), "hidden/`n")
     [IO.File]::WriteAllText((Join-Path $rules '.git/info/exclude'), "local/`n")
     $globalIgnore = Join-Path $temp 'global-ignore'
@@ -136,6 +135,29 @@ try {
         $quoted = ConvertTo-Json -InputObject $path -Compress
         Assert (($map -ccontains $quoted) -eq ($excluded -cnotcontains $path)) "Wrong ignore result: $path"
     }
+    $ignore = Join-Path $rules '.ignore'
+    [IO.File]::WriteAllLines($ignore, @('tracked/', '/top/', 'tree/**', 'open/*', '!open/README.md',
+        'closed/', '!closed/README.md', '\#hash/', 'nested/hidden/'))
+    $map = (Invoke-Map $rules) -split "`n"
+    $excluded = @('tracked/README.md', 'top/README.md', 'tree/deep/README.md', 'closed/README.md', '#hash/README.md', 'nested/hidden/README.md')
+    foreach ($path in $documents) {
+        $quoted = ConvertTo-Json -InputObject $path -Compress
+        Assert (($map -ccontains $quoted) -eq ($excluded -cnotcontains $path)) ".ignore must override Git defaults: $path"
+    }
+    [IO.File]::WriteAllText($ignore, '')
+    $map = (Invoke-Map $rules) -split "`n"
+    foreach ($path in $documents) {
+        Assert ($map -ccontains (ConvertTo-Json -InputObject $path -Compress)) "Empty .ignore must override Git defaults: $path"
+    }
+    Remove-Item -LiteralPath $ignore -Force
+    if ($linksAvailable) {
+        [void](New-Item -ItemType SymbolicLink -Path $ignore -Target $globalIgnore)
+        Assert (((Invoke-Map $rules) -split "`n") -cnotcontains '"tracked/README.md"') 'Symlink .ignore must fall back to Git defaults'
+        Remove-Item -LiteralPath $ignore -Force
+    }
+    [void][IO.Directory]::CreateDirectory($ignore)
+    Assert (((Invoke-Map $rules) -split "`n") -cnotcontains '"tracked/README.md"') 'Directory .ignore must fall back to Git defaults'
+    Remove-Item -LiteralPath $ignore -Force
     [IO.File]::AppendAllText($gitignore, "node_modules/`n")
     if (-not $IsWindows) {
         $blocked = Join-Path $rules 'node_modules'

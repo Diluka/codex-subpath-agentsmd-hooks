@@ -71,7 +71,6 @@ git init -q "$rules/nested"
 touch "$rules/nested/.git/README.md"
 printf '%s\n' 'tracked/' '#comment/' '/top/' 'tree/**' 'open/*' '!open/README.md' \
   'closed/' '!closed/README.md' '\#hash/' > "$rules/.gitignore"
-printf '*\n' > "$rules/.ignore"
 printf 'hidden/\n' > "$rules/nested/.gitignore"
 printf 'local/\n' > "$rules/.git/info/exclude"
 printf 'global/\n' > "$fixture/global-ignore"
@@ -104,4 +103,23 @@ mkdir "$fixture/cleanup"
 output=$(cd "$rules" && TMPDIR="$fixture/cleanup" "$BASH" "$plugin_root/scripts/project_map.sh")
 assert_line open/README.md
 [[ -z "$(find "$fixture/cleanup" -mindepth 1 -print)" ]]
+# .ignore is authoritative, including negation, tracked files, and empty rules.
+printf '%s\n' 'node_modules/' 'tracked/' 'nested/hidden/' 'open/*' '!open/README.md' > "$rules/.ignore"
+output=$(cd "$rules/tracked" && "$BASH" "$plugin_root/scripts/project_map.sh")
+for path in top/README.md local/README.md global/README.md open/README.md; do
+  assert_line "$path"
+done
+for path in tracked/README.md node_modules/README.md nested/hidden/README.md; do
+  if printf '%s\n' "$output" | grep -Fqx -- "$path"; then
+    printf 'Unexpected .ignore entry: %s\n' "$path" >&2; exit 1
+  fi
+done
+: > "$rules/.ignore"
+output=$(cd "$rules" && "$BASH" "$plugin_root/scripts/project_map.sh")
+assert_line tracked/README.md
+assert_line node_modules/README.md
+rm "$rules/.ignore"
+output=$(cd "$rules" && "$BASH" "$plugin_root/scripts/project_map.sh")
+assert_line open/README.md
+if printf '%s\n' "$output" | grep -Fqx 'tracked/README.md'; then exit 1; fi
 printf 'Bash %s: all checks passed\n' "$BASH_VERSION"

@@ -12,10 +12,29 @@ else
 fi
 cd -- "$project_root"
 
+# Isolate .ignore from repository and global rules without modifying the project.
+ignore_root=$project_root
+custom_ignore=false
+if [[ -f .ignore && ! -L .ignore ]]; then
+  custom_ignore=true
+  ignore_root=$(mktemp -d)
+  trap 'rm -rf -- "$ignore_root"' EXIT
+  git -c init.templateDir= init -q "$ignore_root"
+fi
+
 # ponytail: one Git process per directory/document; batch if large trees hit the hook timeout.
 is_ignored() {
   local status=0
-  git check-ignore --no-index --quiet -- "$1" || status=$?
+  if $custom_ignore; then
+    if [[ -d "$1" ]]; then
+      mkdir -p -- "$ignore_root/$1"
+    elif [[ "$1" == */* ]]; then
+      mkdir -p -- "$ignore_root/${1%/*}"
+    fi
+    git -C "$ignore_root" -c core.excludesFile="$project_root/.ignore" check-ignore --no-index --quiet -- "$1" || status=$?
+  else
+    git check-ignore --no-index --quiet -- "$1" || status=$?
+  fi
   if [[ $status -gt 1 ]]; then exit "$status"; fi
   return "$status"
 }
