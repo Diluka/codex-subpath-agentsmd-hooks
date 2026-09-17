@@ -154,7 +154,7 @@ for mode in defaults empty-ignore; do
     if [[ "$mode" == empty-ignore ]]; then : > "$checkout/.ignore"; fi
     output=$(cd "$checkout" && "$BASH" "$plugin_root/scripts/project_map.sh")
     assert_line README.md
-    assert_line "Project root: $(printf '%q' "$checkout")"
+    assert_line "Project root: $(printf '%q' "$(cd "$checkout" && pwd -P)")"
   done
 done
 printf 'Bash %s: all checks passed\n' "$BASH_VERSION"
