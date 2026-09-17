@@ -23,8 +23,28 @@ try {
         exit 0
     }
 
+    $ignoreFile = Get-Item -LiteralPath (Join-Path $root '.ignore') -Force -ErrorAction SilentlyContinue
+    $useIgnoreFile = $ignoreFile -and -not $ignoreFile.PSIsContainer -and
+        -not ($ignoreFile.Attributes -band [IO.FileAttributes]::ReparsePoint) -and
+        ($IsWindows -or $ignoreFile.UnixStat.ItemType -eq 'File')
+    $ignoreRoot = $null
+    if ($useIgnoreFile) {
+        $ignoreRoot = Join-Path ([IO.Path]::GetTempPath()) ('project-map-ignore-' + [guid]::NewGuid())
+        [void][IO.Directory]::CreateDirectory($ignoreRoot)
+        & $git.Source -C $ignoreRoot -c init.templateDir= init --quiet
+        if ($LASTEXITCODE -ne 0) { throw 'Could not initialize ignore matcher' }
+    }
     # ponytail: one Git process per directory/document; batch if large trees hit the hook timeout.
-    function Is-Ignored([string]$relative) {
+    function Is-Ignored([string]$relative, [bool]$directory = $false) {
+        if ($useIgnoreFile) {
+            $mirror = Join-Path $ignoreRoot $relative
+            $parent = if ($directory) { $mirror } else { [IO.Path]::GetDirectoryName($mirror) }
+            [void][IO.Directory]::CreateDirectory($parent)
+            & $git.Source -C $ignoreRoot -c ('core.excludesFile=' + $ignoreFile.FullName) check-ignore --no-index --quiet -- $relative
+            if ($LASTEXITCODE -eq 0) { return $true }
+            if ($LASTEXITCODE -eq 1) { return $false }
+            throw "Git ignore processing failed for: $relative"
+        }
         & $git.Source -C $root check-ignore --no-index --quiet -- $relative
         if ($LASTEXITCODE -eq 0) { return $true }
         if ($LASTEXITCODE -eq 1) { return $false }
@@ -39,7 +59,7 @@ try {
             if ($entry.Name -eq '.git') { continue }
             $relative = [IO.Path]::GetRelativePath($root, $entry.FullName).Replace([IO.Path]::DirectorySeparatorChar, [char]'/')
             if ($entry.PSIsContainer) {
-                if (-not (Is-Ignored $relative)) { $pending.Push($entry.FullName) }
+                if (-not (Is-Ignored $relative $true)) { $pending.Push($entry.FullName) }
             } elseif (($IsWindows -or $entry.UnixStat.ItemType -eq 'File') -and
                 ($entry.Name -ieq 'AGENTS.md' -or $entry.Name -ieq 'README.md') -and
                 -not (Is-Ignored $relative)) {
@@ -65,4 +85,8 @@ try {
 } catch {
     [Console]::Error.WriteLine("Project documentation map failed (map is incomplete): $_")
     exit 1
+} finally {
+    if ($ignoreRoot -and [IO.Directory]::Exists($ignoreRoot)) {
+        Remove-Item -LiteralPath $ignoreRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
