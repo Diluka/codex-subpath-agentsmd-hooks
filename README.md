@@ -9,6 +9,7 @@
 - 递归扫描，包含隐藏目录，匹配文件名的各种大小写形式。路径相对项目根目录排序；Bash 使用原生 `%q` 转义，PowerShell 使用 JSON 字符串转义。
 - 优先使用项目根目录的 `.ignore`（Git 忽略语法；空文件表示不排除任何路径）。存在该文件时，仅使用其规则；否则运行 `git check-ignore --no-index`，回退到 Git 默认规则：各级 `.gitignore`、`.git/info/exclude` 和用户配置的全局规则。
 - 进入目录前先判断并跳过被忽略的目录。忽略规则同样应用于已跟踪文件；嵌套仓库中的文档也会扫描。始终跳过 `.git`、符号链接和非普通文件。
+- 只生成当前根目录内的地图，自动跳过扫描途中遇到的关联工作树（不依赖目录名，也不受 `.ignore` 覆盖）。根目录外的工作树不会扫描；直接从关联工作树启动时，以该工作树为扫描根目录。不跟踪其他会话或后续工作目录切换。
 - 每次重新生成地图。子目录 AGENTS.md 的作用域限于该目录及其后代。
 - `additionalContextLimit: 0` 保证地图完整注入。文档特别多的项目会相应占用更多上下文；扫描超过 15 秒则 hook 超时。
 
@@ -66,7 +67,7 @@ GitHub Actions 在每次 push、PR 和手动触发时，使用 runner 自带工�
 
 Linux 和 Windows 还会使用 Node.js LTS 安装最新版 Codex CLI，在独立配置目录中运行 `tests/test_plugin_install.ps1`：添加仓库市场、安装插件、检查安装文件和启用状态，并执行已安装的 PowerShell hook 验证地图输出。
 
-端到端测试使用本地 Git 仓库构造多层嵌套仓库、真实子模块和导入的子树，复现 `.gitignore` 排除 `apps/*`、`.ignore` 放行子项目的工作空间。逐项比较完整文档清单，验证遗漏、误收录以及删除 `.ignore` 后的回退行为，并沿用 hook 的 15 秒超时。上述跨平台组合和插件安装测试均运行该场景；安装测试直接验证安装后的脚本。Bash 端到端测试需要 Unix 环境，测试驱动需要 PowerShell 7。
+端到端测试使用本地 Git 仓库构造多层嵌套仓库、真实子模块、导入的子树及多个关联工作树，复现 `.gitignore` 排除 `apps/*`、`.ignore` 放行子项目的工作空间。逐项比较完整文档清单，验证遗漏、误收录、根目录及子项目内的工作树排除，以及删除 `.ignore` 后的回退行为，并沿用 hook 的 15 秒超时。上述跨平台组合和插件安装测试均运行该场景；安装测试直接验证安装后的脚本。Bash 端到端测试需要 Unix 环境，测试驱动需要 PowerShell 7。
 
 测试覆盖 Git 子目录、非 Git 项目跳过、重新扫描、隐藏目录、排除规则和特殊文件名；换行目录名、FIFO 仅在 Unix 上验证。Bash 直接输出文本，PowerShell 输出 `hookSpecificOutput.additionalContext` JSON，二者均受 `SessionStart` 支持。
 

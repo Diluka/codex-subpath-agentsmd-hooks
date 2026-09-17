@@ -145,6 +145,18 @@ try {
     Write-File $root '.ignore-only/README.md'
     Write-File $root 'node_modules/dependency/README.md'
     Write-File $root '.git/README.md'
+    # Worktrees coexist with ordinary nested repositories and must never add paths.
+    $checkouts = @(
+        @{ Repository = $root; Path = (Join-Path $root 'custom-checkout') },
+        @{ Repository = $app; Path = (Join-Path $app '.worktrees/session-a') },
+        @{ Repository = $app; Path = (Join-Path $app '.worktrees/session-b') },
+        @{ Repository = $root; Path = (Join-Path $fixture 'external-checkout') }
+    )
+    foreach ($checkout in $checkouts) {
+        $null = Git-In $checkout.Repository @('worktree', 'add', '--quiet', '--detach', $checkout.Path)
+        if (-not [IO.File]::Exists((Join-Path $checkout.Path '.git'))) { throw 'Expected a linked worktree .git file' }
+        Write-File $checkout.Path 'worktree-only/README.md'
+    }
     $base = @('AGENTS.md', 'README.md', 'docs/README.md')
     $custom = $base + @(
         'apps/app/AGENTS.md', 'apps/app/README.md', 'apps/app/.hidden/rEaDmE.Md',
@@ -153,7 +165,7 @@ try {
         'apps/subtree/README.md', 'apps/subtree/docs/AGENTS.md', 'apps/subtree/.hidden/ReAdMe.md', 'apps/subtree/local-only/README.md',
         'git-only/README.md'
     )
-    Assert-Map '.ignore across nested repositories, submodule and subtree' $custom
+    Assert-Map '.ignore across nested repositories, submodule, subtree and worktrees' $custom
     Remove-Item -Force -LiteralPath (Join-Path $root '.ignore')
     # Git fallback prunes apps/* before encountering the submodule boundary.
     Assert-Map 'Git fallback after removing .ignore' ($base + @('.ignore-only/README.md'))

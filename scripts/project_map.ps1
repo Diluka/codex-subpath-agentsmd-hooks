@@ -59,7 +59,18 @@ try {
             if ($entry.Name -eq '.git') { continue }
             $relative = [IO.Path]::GetRelativePath($root, $entry.FullName).Replace([IO.Path]::DirectorySeparatorChar, [char]'/')
             if ($entry.PSIsContainer) {
-                if (-not (Is-Ignored $relative $true)) { $pending.Push($entry.FullName) }
+                if (Is-Ignored $relative $true) { continue }
+                # Linked worktrees have a commondir file; submodules and ordinary repos do not.
+                if ([IO.File]::Exists((Join-Path $entry.FullName '.git'))) {
+                    $commonFile = (& $git.Source -C $entry.FullName rev-parse --git-path commondir 2>$null) -join "`n"
+                    if ($LASTEXITCODE -eq 0 -and $commonFile) {
+                        if (-not [IO.Path]::IsPathRooted($commonFile)) {
+                            $commonFile = Join-Path $entry.FullName $commonFile
+                        }
+                        if ([IO.File]::Exists($commonFile)) { continue }
+                    }
+                }
+                $pending.Push($entry.FullName)
             } elseif (($IsWindows -or $entry.UnixStat.ItemType -eq 'File') -and
                 ($entry.Name -ieq 'AGENTS.md' -or $entry.Name -ieq 'README.md') -and
                 -not (Is-Ignored $relative)) {

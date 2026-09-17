@@ -48,7 +48,13 @@ scan() {
     [[ ${path##*/} != .git ]] || continue
     relative=${path#./}
     if [[ -d "$path" ]]; then
-      if ! is_ignored "$relative"; then scan "$path"; fi
+      if is_ignored "$relative"; then continue; fi
+      # Linked worktrees have a commondir file; submodules and ordinary repos do not.
+      if [[ -f "$path/.git" ]] && (
+        cd -- "$path"
+        common_file=$(git rev-parse --git-path commondir 2>/dev/null) && [[ -f "$common_file" ]]
+      ); then continue; fi
+      scan "$path"
     elif [[ -f "$path" ]]; then
       case ${path##*/} in
         [Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]|[Rr][Ee][Aa][Dd][Mm][Ee].[Mm][Dd])
