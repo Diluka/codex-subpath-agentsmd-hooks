@@ -39,4 +39,9 @@ Assert ($LASTEXITCODE -eq 0) 'Installed hook failed'
 $hook = ($output | ConvertFrom-Json).hookSpecificOutput
 Assert ($hook.hookEventName -ceq 'SessionStart') 'Wrong hook event'
 Assert (($hook.additionalContext -split "`n") -ccontains '"README.md"') 'Installed hook must map README.md'
+# Exercise the installed artifact against the same complex workspace as source CI.
+& (Join-Path $PSScriptRoot 'test_nested_git_e2e.ps1') -Shell pwsh -PluginRoot $installation.installedPath
+if (-not $IsWindows) {
+    & (Join-Path $PSScriptRoot 'test_nested_git_e2e.ps1') -Shell bash -PluginRoot $installation.installedPath
+}
 Write-Output "Plugin installation test passed; fixture retained at $fixture"
