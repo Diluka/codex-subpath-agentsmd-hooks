@@ -190,6 +190,52 @@ try {
     } finally {
         foreach ($name in $savedTemp.Keys) { [Environment]::SetEnvironmentVariable($name, $savedTemp[$name]) }
     }
+    # Linked worktrees are boundaries, regardless of names or ignore rules.
+    $worktrees = Join-Path $temp 'worktrees'
+    Add-Document $worktrees 'README.md'
+    & git -C $worktrees init -q
+    Assert ($LASTEXITCODE -eq 0) 'Worktree fixture init failed'
+    & git -C $worktrees add README.md
+    Assert ($LASTEXITCODE -eq 0) 'Worktree fixture add failed'
+    & git -C $worktrees -c user.name=Test -c user.email=test@example.invalid -c commit.gpgsign=false commit -qm fixture
+    Assert ($LASTEXITCODE -eq 0) 'Worktree fixture commit failed'
+    $inside = Join-Path $worktrees 'custom checkout'
+    $outside = Join-Path $temp 'external checkout'
+    foreach ($checkout in @($inside, $outside)) {
+        & git -C $worktrees worktree add -q --detach $checkout
+        Assert ($LASTEXITCODE -eq 0) 'git worktree add failed'
+    }
+    Add-Document $outside 'AGENTS.md'
+    $nested = Join-Path $worktrees 'nested'
+    Add-Document $nested 'AGENTS.md'
+    & git -C $nested init -q
+    Assert ($LASTEXITCODE -eq 0) 'Nested fixture init failed'
+    & git -C $nested add AGENTS.md
+    Assert ($LASTEXITCODE -eq 0) 'Nested fixture add failed'
+    & git -C $nested -c user.name=Test -c user.email=test@example.invalid -c commit.gpgsign=false commit -qm fixture
+    Assert ($LASTEXITCODE -eq 0) 'Nested fixture commit failed'
+    & git -C $nested worktree add -q --detach (Join-Path $nested 'another checkout')
+    Assert ($LASTEXITCODE -eq 0) 'Nested worktree add failed'
+    $separate = Join-Path $worktrees 'separate'
+    $separateMetadata = Join-Path $temp 'separate-metadata'
+    & git init -q "--separate-git-dir=$separateMetadata" $separate
+    Assert ($LASTEXITCODE -eq 0) 'Separate git directory fixture init failed'
+    Add-Document $separate 'README.md'
+    foreach ($mode in @('defaults', 'empty-ignore')) {
+        if ($mode -eq 'empty-ignore') { [IO.File]::WriteAllText((Join-Path $worktrees '.ignore'), '') }
+        $map = (Invoke-Map $worktrees) -split "`n"
+        Assert ($map -ccontains '"README.md"') 'Root document must remain in the map'
+        Assert ($map -ccontains '"nested/AGENTS.md"') 'Ordinary nested repository must remain in the map'
+        Assert ($map -ccontains '"separate/README.md"') 'Separate git directory repository must remain in the map'
+        Assert (($map -join "`n") -notmatch 'checkout') "Other worktrees must be excluded: $mode"
+        Assert ($map -cnotcontains '"AGENTS.md"') 'External worktree documents must not enter the root map'
+        foreach ($checkout in @($inside, $outside)) {
+            if ($mode -eq 'empty-ignore') { [IO.File]::WriteAllText((Join-Path $checkout '.ignore'), '') }
+            $context = Invoke-Map $checkout
+            Assert (($context -split "`n") -ccontains '"README.md"') 'Current worktree must produce its own map'
+            Assert ($context.Contains('Project root: ' + (ConvertTo-Json -InputObject $checkout -Compress))) 'Current worktree must be the map root'
+        }
+    }
     Write-Host 'PASS PowerShell project map checks'
 } finally {
     Write-Host "Test fixtures retained: $temp"

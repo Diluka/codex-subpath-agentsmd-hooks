@@ -60,6 +60,6 @@ jobs:
         if: matrix.shell == 'pwsh'
         shell: pwsh
         run: ${{ matrix.command }}
-      - name: Verify nested Git workspace end to end
+      - name: Verify nested Git workspace and worktree exclusion end to end
         shell: pwsh
         run: ./tests/test_nested_git_e2e.ps1 -Shell '${{ matrix.shell }}'

@@ -122,4 +122,39 @@ rm "$rules/.ignore"
 output=$(cd "$rules" && "$BASH" "$plugin_root/scripts/project_map.sh")
 assert_line open/README.md
 if printf '%s\n' "$output" | grep -Fqx 'tracked/README.md'; then exit 1; fi
+# Linked worktrees are boundaries, regardless of names or ignore rules.
+worktrees="$fixture/worktrees"
+mkdir "$worktrees"
+git init -q "$worktrees"
+printf 'root document\n' > "$worktrees/README.md"
+git -C "$worktrees" add README.md
+git -C "$worktrees" -c user.name=Test -c user.email=test@example.invalid -c commit.gpgsign=false commit -qm fixture
+git -C "$worktrees" worktree add -q --detach "$worktrees/custom checkout"
+git -C "$worktrees" worktree add -q --detach "$fixture/external checkout"
+touch "$fixture/external checkout/AGENTS.md"
+mkdir "$worktrees/nested"
+git init -q "$worktrees/nested"
+touch "$worktrees/nested/AGENTS.md"
+git -C "$worktrees/nested" add AGENTS.md
+git -C "$worktrees/nested" -c user.name=Test -c user.email=test@example.invalid -c commit.gpgsign=false commit -qm fixture
+git -C "$worktrees/nested" worktree add -q --detach "$worktrees/nested/another checkout"
+git init -q --separate-git-dir="$fixture/separate-metadata" "$worktrees/separate"
+touch "$worktrees/separate/README.md"
+for mode in defaults empty-ignore; do
+  if [[ "$mode" == empty-ignore ]]; then : > "$worktrees/.ignore"; fi
+  output=$(cd "$worktrees" && "$BASH" "$plugin_root/scripts/project_map.sh")
+  assert_line README.md
+  assert_line nested/AGENTS.md
+  assert_line separate/README.md
+  if printf '%s\n' "$output" | grep -Eq 'checkout|^AGENTS.md$'; then
+    printf 'Other worktrees leaked into root map (%s)\n%s\n' "$mode" "$output" >&2
+    exit 1
+  fi
+  for checkout in "$worktrees/custom checkout" "$fixture/external checkout"; do
+    if [[ "$mode" == empty-ignore ]]; then : > "$checkout/.ignore"; fi
+    output=$(cd "$checkout" && "$BASH" "$plugin_root/scripts/project_map.sh")
+    assert_line README.md
+    assert_line "Project root: $(printf '%q' "$(cd "$checkout" && pwd -P)")"
+  done
+done
 printf 'Bash %s: all checks passed\n' "$BASH_VERSION"
