@@ -52,6 +52,8 @@ bash scripts/project_map.sh
 ```bash
 bash tests/test_project_map.sh
 pwsh -NoLogo -NoProfile -File tests/test_project_map.ps1
+pwsh -NoLogo -NoProfile -File tests/test_nested_git_e2e.ps1 -Shell bash
+pwsh -NoLogo -NoProfile -File tests/test_nested_git_e2e.ps1 -Shell pwsh
 ```
 
 GitHub Actions 在每次 push、PR 和手动触发时，使用 runner 自带工具运行以下组合：
@@ -63,6 +65,8 @@ GitHub Actions 在每次 push、PR 和手动触发时，使用 runner 自带工�
 | macOS | 系统 `/bin/bash`、BSD `sort` |
 
 Linux 和 Windows 还会使用 Node.js LTS 安装最新版 Codex CLI，在独立配置目录中运行 `tests/test_plugin_install.ps1`：添加仓库市场、安装插件、检查安装文件和启用状态，并执行已安装的 PowerShell hook 验证地图输出。
+
+端到端测试使用本地 Git 仓库构造多层嵌套仓库、真实子模块和导入的子树，复现 `.gitignore` 排除 `apps/*`、`.ignore` 放行子项目的工作空间。逐项比较完整文档清单，验证遗漏、误收录以及删除 `.ignore` 后的回退行为，并沿用 hook 的 15 秒超时。上述跨平台组合和插件安装测试均运行该场景；安装测试直接验证安装后的脚本。Bash 端到端测试需要 Unix 环境，测试驱动需要 PowerShell 7。
 
 测试覆盖 Git 子目录、非 Git 项目跳过、重新扫描、隐藏目录、排除规则和特殊文件名；换行目录名、FIFO 仅在 Unix 上验证。Bash 直接输出文本，PowerShell 输出 `hookSpecificOutput.additionalContext` JSON，二者均受 `SessionStart` 支持。
 
